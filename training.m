@@ -39,11 +39,11 @@ vol_gain = 1; % to slowdown the robot
 % 1. Action and observation signals that the agent uses to interact with the environment. For more information, see rlNumericSpec and rlFiniteSetSpec.
 % 2. Reward signal that the agent uses to measure its success. For more information, see Define Reward Signals.
 % Define the observation specification obsInfo and action specification actInfo.
-obsInfo = rlNumericSpec([2 1],... %integral error, error, height
-    'LowerLimit',[-inf -inf]',...
-    'UpperLimit',[ inf  inf]');
+obsInfo = rlNumericSpec([22 1],... %integral error, error, height
+    'LowerLimit',zeros(1,22)',...
+    'UpperLimit',ones(1,22)');
 obsInfo.Name = 'observations';
-obsInfo.Description = 'distance error and heading error';
+obsInfo.Description = 'distance error and heading error fuzzified 22 classes each';
 numObservations = obsInfo.Dimension(1);
 
 actInfo = rlNumericSpec([2 1]);
@@ -78,7 +78,7 @@ rng(0)
 %             'Bias',2/sqrt(criticLayerSizes(1))*(rand(criticLayerSizes(2),1)-0.5))
 
 %% CRITIC network
-criticLayerSizes = [50 50];
+criticLayerSizes = [50 20];
 statePath = [
     imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
     fullyConnectedLayer(criticLayerSizes(1),'Name','CriticStateFC1')
@@ -121,9 +121,12 @@ critic = rlRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},
 % Construct the actor in a similar manner to the critic.
 % For more information, see "rlDeterministicActorRepresentation".
 
+actorLayerSizes = [50 20];
 actorNetwork = [
     imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
-    fullyConnectedLayer(3, 'Name','actorFC')
+    fullyConnectedLayer(actorLayerSizes(1), 'Name','actorFC1')
+    reluLayer('Name','actorRelu1')
+    fullyConnectedLayer(actorLayerSizes(2),'Name','actorFC2')
     tanhLayer('Name','actorTanh')
     fullyConnectedLayer(numActions,'Name','Action')
     ];
@@ -154,7 +157,7 @@ agent = rlDDPGAgent(actor,critic,agentOpts);
 % 3. Stop training when the agent receives an average cumulative reward greater than 800 over 20 consecutive episodes. At this point, the agent can control the level of water in the tank.
 % For more information, see rlTrainingOptions.
 
-maxepisodes = 5000;
+maxepisodes = 100000;
 maxsteps = ceil(Tf/Ts);
 trainOpts = rlTrainingOptions(...
     'MaxEpisodes',maxepisodes, ...
