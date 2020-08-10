@@ -32,16 +32,16 @@ xa_init=0;
 ya_init=0;
 theta_init=deg2rad(0);
 
-vol_gain = 1; % to slowdown the robot
+vol_gain = 11; % to slowdown the robot
 
 %% Create Environment Interface
 % Creating an environment model includes defining the following:
 % 1. Action and observation signals that the agent uses to interact with the environment. For more information, see rlNumericSpec and rlFiniteSetSpec.
 % 2. Reward signal that the agent uses to measure its success. For more information, see Define Reward Signals.
 % Define the observation specification obsInfo and action specification actInfo.
-obsInfo = rlNumericSpec([22 1],... %integral error, error, height
-    'LowerLimit',zeros(1,22)',...
-    'UpperLimit',ones(1,22)');
+obsInfo = rlNumericSpec([3 1],... %integral error, error, height
+    'LowerLimit',[-inf -inf -inf]',...
+    'UpperLimit',[inf inf inf]');
 obsInfo.Name = 'observations';
 obsInfo.Description = 'distance error and heading error fuzzified 22 classes each';
 numObservations = obsInfo.Dimension(1);
@@ -59,11 +59,11 @@ env = rlSimulinkEnv('model','model/FLC/RL Agent',...
 env.ResetFcn = @(in)localResetFcn(in);
 
 %% Specify the simulation time Tf and the agent sample time Ts in seconds.
-Ts = 1.0;
+Ts = 0.1;
 Tf = 60;
 
 %% Fix the random generator seed for reproducibility.
-rng(0)
+% rng(0)
 
 %% Create DDPG Agent
 % Given observations and actions, a DDPG agent approximates the long-term
@@ -78,15 +78,17 @@ rng(0)
 %             'Bias',2/sqrt(criticLayerSizes(1))*(rand(criticLayerSizes(2),1)-0.5))
 
 %% CRITIC network
-criticLayerSizes = [50 20];
+criticLayerSizes = [200 200 100];
 statePath = [
     imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
     fullyConnectedLayer(criticLayerSizes(1),'Name','CriticStateFC1')
     reluLayer('Name','CriticRelu1')
-    fullyConnectedLayer(criticLayerSizes(2),'Name','CriticStateFC2')];
+    fullyConnectedLayer(criticLayerSizes(2),'Name','CriticStateFC2')
+    reluLayer('Name','CriticRelu2')
+    fullyConnectedLayer(criticLayerSizes(3),'Name','CriticStateFC3')];
 actionPath = [
     imageInputLayer([numActions 1 1],'Normalization','none','Name','Action')
-    fullyConnectedLayer(criticLayerSizes(2),'Name','CriticActionFC1')];
+    fullyConnectedLayer(criticLayerSizes(3),'Name','CriticActionFC1')];
 commonPath = [
     additionLayer(2,'Name','add')
     reluLayer('Name','CriticCommonRelu')
@@ -96,7 +98,7 @@ criticNetwork = layerGraph();
 criticNetwork = addLayers(criticNetwork,statePath);
 criticNetwork = addLayers(criticNetwork,actionPath);
 criticNetwork = addLayers(criticNetwork,commonPath);
-criticNetwork = connectLayers(criticNetwork,'CriticStateFC2','add/in1');
+criticNetwork = connectLayers(criticNetwork,'CriticStateFC3','add/in1');
 criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
 
 %% View the critic network configuration.
@@ -121,14 +123,17 @@ critic = rlRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},
 % Construct the actor in a similar manner to the critic.
 % For more information, see "rlDeterministicActorRepresentation".
 
-actorLayerSizes = [50 20];
+actorLayerSizes = [200 200 100];
 actorNetwork = [
     imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
     fullyConnectedLayer(actorLayerSizes(1), 'Name','actorFC1')
     reluLayer('Name','actorRelu1')
-    fullyConnectedLayer(actorLayerSizes(2),'Name','actorFC2')
+    fullyConnectedLayer(actorLayerSizes(2), 'Name','actorFC2')
+    reluLayer('Name','actorRelu2')
+    fullyConnectedLayer(actorLayerSizes(3),'Name','actorFC3')
     tanhLayer('Name','actorTanh')
-    fullyConnectedLayer(numActions,'Name','Action')
+    fullyConnectedLayer(numActions,'Name','Action0')
+    tanhLayer('Name','Action')
     ];
 
 actorOptions = rlRepresentationOptions('LearnRate',1e-04,'GradientThreshold',1);
@@ -157,7 +162,7 @@ agent = rlDDPGAgent(actor,critic,agentOpts);
 % 3. Stop training when the agent receives an average cumulative reward greater than 800 over 20 consecutive episodes. At this point, the agent can control the level of water in the tank.
 % For more information, see rlTrainingOptions.
 
-maxepisodes = 100000;
+maxepisodes = 50000;
 maxsteps = ceil(Tf/Ts);
 trainOpts = rlTrainingOptions(...
     'MaxEpisodes',maxepisodes, ...
@@ -166,16 +171,16 @@ trainOpts = rlTrainingOptions(...
     'Verbose',false, ...
     'Plots','training-progress',...
     'StopTrainingCriteria','AverageReward',...
-    'StopTrainingValue',800);
+    'StopTrainingValue',1000000);
 
-doTraining = true;
+doTraining = false;
 
 if doTraining
     % Train the agent.
     trainingStats = train(agent,env,trainOpts);
 else
     % Load the pretrained agent for the example.
-    load('tflc_DDPG.mat','agent')
+    load('trained_agent.mat','agent')
 end
 
 %% Validate Trained Agent
