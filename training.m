@@ -173,7 +173,7 @@ trainOpts = rlTrainingOptions(...
     'StopTrainingCriteria','AverageReward',...
     'StopTrainingValue',1000000);
 
-doTraining = false;
+doTraining = true;
 
 if doTraining
     % Train the agent.
