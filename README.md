@@ -67,7 +67,11 @@ The robot dynamic can be seen [here ![](https://i.imgur.com/RmvkGxz.png)
 ## Target approaching result. with and without disturbance  
 ![](https://i.imgur.com/CTRkTjp.png)  
 
---
+## Following figure of 8  
+![](https://i.imgur.com/1lnlckE.png)  
+![](https://i.imgur.com/MyJIAia.png)  
+
+---
 
 # Tutorial  
 1. For testing, open `testing.m` and run.  
