@@ -1,4 +1,6 @@
 clear;
+%% load result
+a = load('workspace');
 %% Parameters for C23-L33-W20 terminal voltage for this motor is 12V
 La= 0.94e-3; %H, inductance of the armature winding
 Ra= 1; %Ohm, resistance of the armature winding
@@ -23,7 +25,7 @@ ksep = 1;           %S scaler
 ksep_dot = 100;     %S dot scaler
 
 %% Input
-tau_b = 0; %disturbance amplitude
+tau_b = 2; %disturbance amplitude
 f = 10;
 
 G_x = -10; %When not using path generator
@@ -33,35 +35,31 @@ xa_init=0;
 ya_init=0;
 theta_init=deg2rad(0);
 
-vol_gain = 11; % to slowdown the robot
+vol_gain = 10; % to slowdown the robot
+
+Ts = 0.1;
+Tf = 5;
 
 %% Create Environment Interface
 % Creating an environment model includes defining the following:
 % 1. Action and observation signals that the agent uses to interact with the environment. For more information, see rlNumericSpec and rlFiniteSetSpec.
 % 2. Reward signal that the agent uses to measure its success. For more information, see Define Reward Signals.
 % Define the observation specification obsInfo and action specification actInfo.
-obsInfo = rlNumericSpec([3 1],... %integral error, error, height
-    'LowerLimit',[-inf -inf -inf]',...
-    'UpperLimit',[inf inf inf]');
-obsInfo.Name = 'observations';
-obsInfo.Description = 'distance error and heading error fuzzified 22 classes each';
-numObservations = obsInfo.Dimension(1);
+obsInfo = a.obsInfo;
+obsInfo.Name = a.obsInfo.Name;
+obsInfo.Description = a.obsInfo.Description;
+numObservations = a.numObservations;
 
-actInfo = rlNumericSpec([2 1]);
-actInfo.Name = 'volt R and volt L';
-numActions = actInfo.Dimension(1);
+actInfo = a.actInfo;
+actInfo.Name = a.actInfo.Name;
+numActions = a.numActions;
 
 %% Build the environment interface object.
-env = rlSimulinkEnv('model','model/FLC/RL Agent',...
-    obsInfo,actInfo);
+env = a.env;
 
 
 %% Set a custom reset function that randomizes the reference values for the model.
 % env.ResetFcn = @(in)localResetFcn(in, G_x, G_y);
-
-%% Specify the simulation time Tf and the agent sample time Ts in seconds.
-Ts = 0.1;
-Tf = 3;
 
 %% Fix the random generator seed for reproducibility.
 % rng(0)
@@ -79,42 +77,17 @@ Tf = 3;
 %             'Bias',2/sqrt(criticLayerSizes(1))*(rand(criticLayerSizes(2),1)-0.5))
 
 %% CRITIC network
-criticLayerSizes = [200 200 100];
-statePath = [
-    imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
-    fullyConnectedLayer(criticLayerSizes(1),'Name','CriticStateFC1')
-    reluLayer('Name','CriticRelu1')
-    fullyConnectedLayer(criticLayerSizes(2),'Name','CriticStateFC2')
-    reluLayer('Name','CriticRelu2')
-    fullyConnectedLayer(criticLayerSizes(3),'Name','CriticStateFC3')];
-actionPath = [
-    imageInputLayer([numActions 1 1],'Normalization','none','Name','Action')
-    fullyConnectedLayer(criticLayerSizes(3),'Name','CriticActionFC1')];
-commonPath = [
-    additionLayer(2,'Name','add')
-    reluLayer('Name','CriticCommonRelu')
-    fullyConnectedLayer(1,'Name','CriticOutput')];
-
-criticNetwork = layerGraph();
-criticNetwork = addLayers(criticNetwork,statePath);
-criticNetwork = addLayers(criticNetwork,actionPath);
-criticNetwork = addLayers(criticNetwork,commonPath);
-criticNetwork = connectLayers(criticNetwork,'CriticStateFC3','add/in1');
-criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
-
-%% View the critic network configuration.
-% figure
-% plot(criticNetwork)
+criticNetwork = a.criticNetwork;
 
 %% Specify options for the critic representation using "rlRepresentationOptions".
-criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1);
+criticOpts = a.criticOpts;
 
 %% Create the critic representation using the specified deep neural network
 % and options. You must also specify the action and observation specifications
 % for the critic, which you obtain from the environment interface.
 % For more information, see "rlQValueRepresentation".
 % critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts); %only for matlab 2020a
-critic = rlRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
+critic = a.critic;
 
 %% ACTOR network
 % Given observations, a DDPG agent decides which action to take using an 
@@ -124,40 +97,21 @@ critic = rlRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},
 % Construct the actor in a similar manner to the critic.
 % For more information, see "rlDeterministicActorRepresentation".
 
-actorLayerSizes = [200 200 100];
-actorNetwork = [
-    imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
-    fullyConnectedLayer(actorLayerSizes(1), 'Name','actorFC1')
-    reluLayer('Name','actorRelu1')
-    fullyConnectedLayer(actorLayerSizes(2), 'Name','actorFC2')
-    reluLayer('Name','actorRelu2')
-    fullyConnectedLayer(actorLayerSizes(3),'Name','actorFC3')
-    tanhLayer('Name','actorTanh')
-    fullyConnectedLayer(numActions,'Name','Action0')
-    tanhLayer('Name','Action')
-    ];
+actorNetwork = a.actorNetwork;
 
-actorOptions = rlRepresentationOptions('LearnRate',1e-04,'GradientThreshold',1);
+actorOptions = a.actorOptions;
 
 % actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions); %only for matlab 2020a
-actor = rlRepresentation (actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions);
+actor = a.actor;
 
 %% AGENT
 %To create the DDPG agent, first specify the DDPG agent options using rlDDPGAgentOptions.
-agentOpts = rlDDPGAgentOptions(...
-    'SampleTime',Ts,...
-    'TargetSmoothFactor',1e-3,...
-    'DiscountFactor',1.0, ...
-    'MiniBatchSize',64, ...
-    'ExperienceBufferLength',1e6); 
-agentOpts.NoiseOptions.Variance = 0.3;
-agentOpts.NoiseOptions.VarianceDecayRate = 1e-5;
+agentOpts = a.agentOpts;
+agentOpts.NoiseOptions.Variance = a.agentOpts.NoiseOptions.Variance;
+agentOpts.NoiseOptions.VarianceDecayRate = a.agentOpts.NoiseOptions.VarianceDecayRate;
 
 %% Then, create the DDPG agent using the specified actor representation, critic representation, and agent options. For more information, see rlDDPGAgent.
-agent = rlDDPGAgent(actor,critic,agentOpts);
-
-% Load the pretrained agent for the example.
-load('trained_agent.mat','agent')
+agent = a.agent;
 
 %% Validate Trained Agent
 % Validate the learned agent against the model by simulation.
@@ -165,7 +119,7 @@ simout = sim('model');
 
 %% ----------Plot x vs y---------------
 figure(4);
-plot(simout.xa, simout.ya, G_x, G_y, '*', xa_init, ya_init, 'g*', 'LineWidth', 2, 'MarkerSize', 4), xlabel('x(m)'), ylabel('y(m)'), axis equal, grid on;
+plot(simout.xa, simout.ya, G_x, G_y, '*', xa_init, ya_init, 'g*', 'LineWidth', 2, 'MarkerSize', 4), xlabel('x(m)'), ylabel('y(m)'), axis equal, grid on, hold on;
 title(['robot path']);
 legend({'robot path', 'goal position', 'start position'},'Location','northeast')
 set(gca,'FontSize',12);

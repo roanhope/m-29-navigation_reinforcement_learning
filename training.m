@@ -1,3 +1,4 @@
+
 %% Parameters for C23-L33-W20 terminal voltage for this motor is 12V
 La= 0.94e-3; %H, inductance of the armature winding
 Ra= 1; %Ohm, resistance of the armature winding
@@ -32,16 +33,16 @@ xa_init=0;
 ya_init=0;
 theta_init=deg2rad(0);
 
-vol_gain = 11; % to slowdown the robot
+vol_gain = 10; % to slowdown the robot
 
 %% Create Environment Interface
 % Creating an environment model includes defining the following:
 % 1. Action and observation signals that the agent uses to interact with the environment. For more information, see rlNumericSpec and rlFiniteSetSpec.
 % 2. Reward signal that the agent uses to measure its success. For more information, see Define Reward Signals.
 % Define the observation specification obsInfo and action specification actInfo.
-obsInfo = rlNumericSpec([3 1],... %integral error, error, height
-    'LowerLimit',[-inf -inf -inf]',...
-    'UpperLimit',[inf inf inf]');
+obsInfo = rlNumericSpec([4 1],... %integral error, error, height
+    'LowerLimit',[-inf -inf -inf -inf]',...
+    'UpperLimit',[inf inf inf inf]');
 obsInfo.Name = 'observations';
 obsInfo.Description = 'distance error and heading error fuzzified 22 classes each';
 numObservations = obsInfo.Dimension(1);
@@ -59,8 +60,8 @@ env = rlSimulinkEnv('model','model/FLC/RL Agent',...
 env.ResetFcn = @(in)localResetFcn(in);
 
 %% Specify the simulation time Tf and the agent sample time Ts in seconds.
-Ts = 0.1;
-Tf = 60;
+Ts = 0.05;
+Tf = 20;
 
 %% Fix the random generator seed for reproducibility.
 % rng(0)
@@ -123,15 +124,15 @@ critic = rlRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},
 % Construct the actor in a similar manner to the critic.
 % For more information, see "rlDeterministicActorRepresentation".
 
-actorLayerSizes = [200 200 100];
+actorLayerSizes = [200 200 200];
 actorNetwork = [
     imageInputLayer([numObservations 1 1],'Normalization','none','Name','State')
     fullyConnectedLayer(actorLayerSizes(1), 'Name','actorFC1')
     reluLayer('Name','actorRelu1')
     fullyConnectedLayer(actorLayerSizes(2), 'Name','actorFC2')
     reluLayer('Name','actorRelu2')
-    fullyConnectedLayer(actorLayerSizes(3),'Name','actorFC3')
-    tanhLayer('Name','actorTanh')
+%     fullyConnectedLayer(actorLayerSizes(3),'Name','actorFC3')
+%     tanhLayer('Name','actorTanh')
     fullyConnectedLayer(numActions,'Name','Action0')
     tanhLayer('Name','Action')
     ];
@@ -146,7 +147,7 @@ actor = rlRepresentation (actorNetwork,obsInfo,actInfo,'Observation',{'State'},'
 agentOpts = rlDDPGAgentOptions(...
     'SampleTime',Ts,...
     'TargetSmoothFactor',1e-3,...
-    'DiscountFactor',1.0, ...
+    'DiscountFactor',0.9, ...
     'MiniBatchSize',64, ...
     'ExperienceBufferLength',1e6); 
 agentOpts.NoiseOptions.Variance = 0.3;
@@ -173,15 +174,7 @@ trainOpts = rlTrainingOptions(...
     'StopTrainingCriteria','AverageReward',...
     'StopTrainingValue',1000000);
 
-doTraining = true;
-
-if doTraining
-    % Train the agent.
-    trainingStats = train(agent,env,trainOpts);
-else
-    % Load the pretrained agent for the example.
-    load('trained_agent.mat','agent')
-end
+trainingStats = train(agent,env,trainOpts);
 
 %% Validate Trained Agent
 % Validate the learned agent against the model by simulation.
