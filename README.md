@@ -54,7 +54,7 @@ The robot dynamic can be seen [here ![](https://i.imgur.com/RmvkGxz.png)
 ![](https://i.imgur.com/6M6pIa1.png)
 ![](https://i.imgur.com/v1lhDqa.png)  
 
-----
+---
 
 # Result  
 
@@ -67,4 +67,12 @@ The robot dynamic can be seen [here ![](https://i.imgur.com/RmvkGxz.png)
 ## Target approaching result. with and without disturbance  
 ![](https://i.imgur.com/CTRkTjp.png)  
 
+--
+
+# Tutorial  
+1. For testing, open `testing.m` and run.  
+2. For training, open `training.m` and run.  
+3. To follow path, use `path_generator.m` to follow point array.  
+
+---
 
