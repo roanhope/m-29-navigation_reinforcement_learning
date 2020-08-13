@@ -9,6 +9,15 @@ by:
 
 ---
 
+# Tutorial  
+1. For testing, open `testing.m`.  
+    1. change `mode=1` to approach point.  
+    2. change `mode=2` to follow point array.  
+3. For training, open `training.m`.  
+4. To follow path, use `path_generator.m` to generate point array.  
+
+---
+
 # System description  
 
 ## Robot dynamic    
@@ -73,10 +82,12 @@ The robot dynamic can be seen [here ![](https://i.imgur.com/RmvkGxz.png)
 
 ---
 
-# Tutorial  
-1. For testing, open `testing.m` and run.  
-2. For training, open `training.m` and run.  
-3. To follow path, use `path_generator.m` to follow point array.  
 
----
+# References
 
+[1]  
+[2]  
+[3]  
+[4]  
+
+###### tags: `reinforcement learning` `matlab` `robot`
